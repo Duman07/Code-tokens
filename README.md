@@ -22,7 +22,7 @@ App de Windows (Tauri)          App + widget de Android (Kotlin / Glance)
 3. **Authentication → Users → Add user**: crea tu usuario con correo y contraseña (marca *Auto Confirm User*).
 4. **Project Settings → API Keys**: copia la **Publishable key** (`sb_publishable_…`), o la **anon** antigua (`eyJ…`) si tu proyecto la tiene. La URL (`https://xxxx.supabase.co`) está en **Project Settings → Data API**.
 
-La clave anon es pública: con ella solo se puede iniciar sesión o llamar a `reportar_uso` con un token válido.
+La clave publishable (o anon) es pública: con ella solo se puede iniciar sesión o llamar a `reportar_uso` con un token válido.
 Nunca uses la clave `service_role` en estas apps.
 
 ## 2. App de Windows
@@ -40,7 +40,7 @@ En una PC con Windows:
    Para probar sin instalar: `cargo tauri dev`.
 
 Al abrirla:
-- Pon la URL, la clave anon, tu correo y tu contraseña de Supabase.
+- Pon la URL, la clave pública (`sb_publishable_…`), tu correo y tu contraseña de Supabase.
 - **⚙ Ajustes → Generar token**: copia el token (empieza por `ctk_`). Se muestra una sola vez.
   Un token por equipo; desde ahí también los quitas.
 - La ventana es pequeña (340 × 600) y queda **siempre encima**. Tiene modo compacto en Ajustes.
@@ -49,8 +49,8 @@ Al abrirla:
 
 En Claude Code escribe `/config`, busca **contador-tokens** y llena:
 - *Supabase: URL del proyecto*
-- *Supabase: clave anon (pública)*
-- *Token de dispositivo*: el `ctk_…` de la app de Windows. Se guarda en el almacén seguro.
+- *Supabase: clave pública (publishable o anon)*
+- *Token de dispositivo*: el `ctk_…` de la app de Windows. Queda en `~/.claude/settings.json`; solo sirve para reportar uso y lo puedes revocar desde la app.
 
 El mod se recarga solo. Al terminar el siguiente turno, el panel de Tokens muestra «Sincronizado HH:MM»
 o, si algo falla, «Sin sincronizar: motivo».
@@ -61,12 +61,12 @@ Si lo prefieres, en `~/.claude/settings.json`:
   "contador-tokens": {
     "options": {
       "supabase_url": "https://xxxx.supabase.co",
-      "supabase_anon_key": "eyJ..."
+      "supabase_anon_key": "sb_publishable_..."
     }
   }
 }
 ```
-Y el token por `/config`, para que no quede en texto plano.
+El token también se pone por `/config`.
 
 ## 4. App y widget de Android
 

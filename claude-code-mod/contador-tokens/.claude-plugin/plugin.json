@@ -20,7 +20,6 @@
       "type": "string",
       "title": "Token de dispositivo",
       "description": "El que genera la app de Windows en Ajustes (empieza por ctk_).",
-      "sensitive": true,
       "default": ""
     }
   }

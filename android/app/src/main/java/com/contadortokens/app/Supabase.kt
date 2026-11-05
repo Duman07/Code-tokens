@@ -127,7 +127,7 @@ class Supabase(context: Context) {
     fun enCache(): List<Uso> = runCatching { leerUso(prefs.getString("cache", "[]")!!) }.getOrDefault(emptyList())
 
     suspend fun entrar(url: String, clave: String, correo: String, contrasena: String) {
-        prefs.edit().putString("url", url.trim().trimEnd('/')).putString("clave", clave.trim()).apply()
+        prefs.edit().putString("url", soloDominio(url)).putString("clave", clave.trim()).apply()
         val cuerpo = JSONObject().put("email", correo.trim()).put("password", contrasena)
         guardarSesion(auth("password", cuerpo))
     }
@@ -213,4 +213,12 @@ class Supabase(context: Context) {
                 c.disconnect()
             }
         }
+}
+
+/** Deja solo `https://xxxx.supabase.co`, aunque peguen `/rest/v1/` u otra ruta detrás. */
+internal fun soloDominio(url: String): String {
+    val limpio = url.trim()
+    val conEsquema = if (limpio.contains("://")) limpio else "https://$limpio"
+    val uri = android.net.Uri.parse(conEsquema)
+    return "${uri.scheme ?: "https"}://${uri.host ?: limpio}"
 }

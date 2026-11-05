@@ -96,7 +96,7 @@ private fun Entrar(supabase: Supabase, alEntrar: () -> Unit) {
         Text("Conecta con tu proyecto de Supabase.", color = TENUE)
         Spacer(Modifier.height(12.dp))
         OutlinedTextField(url, { url = it }, label = { Text("URL del proyecto") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(clave, { clave = it }, label = { Text("Clave anon (pública)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(clave, { clave = it }, label = { Text("Clave pública (publishable o anon)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(
             correo, { correo = it }, label = { Text("Correo") }, singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), modifier = Modifier.fillMaxWidth(),
