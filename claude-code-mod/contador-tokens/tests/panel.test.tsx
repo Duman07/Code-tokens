@@ -119,6 +119,7 @@ test('envía cada medición a Supabase', { options: OPCIONES }, async ($, on) =>
   expect(envios).toHaveLength(1)
   expect(envios[0].url).toBe('https://demo.supabase.co/rest/v1/rpc/reportar_uso')
   expect(envios[0].init.headers.apikey).toBe('anon-123')
+  expect(envios[0].init.headers.Authorization).toBeUndefined()
   const cuerpo = JSON.parse(envios[0].init.body)
   expect(cuerpo.p_token).toBe('ctk_abc')
   expect(cuerpo.p_datos).toMatchObject({

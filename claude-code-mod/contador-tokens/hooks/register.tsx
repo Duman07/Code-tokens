@@ -246,9 +246,9 @@ async function sincronizar($: EngineInterface, config: Config | undefined) {
   try {
     const r = await $.http.fetch(`${config.url}/rest/v1/rpc/reportar_uso`, {
       method: 'POST',
+      // Solo `apikey`: sirve con la clave nueva (sb_publishable_…) y con la anon antigua (eyJ…).
       headers: {
         apikey: config.clave,
-        Authorization: `Bearer ${config.clave}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ p_token: config.token, p_datos: cuerpo }),

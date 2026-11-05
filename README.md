@@ -20,7 +20,7 @@ App de Windows (Tauri)          App + widget de Android (Kotlin / Glance)
 1. Crea un proyecto en https://supabase.com (el plan gratuito sirve).
 2. **SQL Editor → New query**: pega `supabase/esquema.sql` y pulsa **Run**.
 3. **Authentication → Users → Add user**: crea tu usuario con correo y contraseña (marca *Auto Confirm User*).
-4. **Project Settings → API**: copia la **Project URL** y la clave **anon public**.
+4. **Project Settings → API Keys**: copia la **Publishable key** (`sb_publishable_…`), o la **anon** antigua (`eyJ…`) si tu proyecto la tiene. La URL (`https://xxxx.supabase.co`) está en **Project Settings → Data API**.
 
 La clave anon es pública: con ella solo se puede iniciar sesión o llamar a `reportar_uso` con un token válido.
 Nunca uses la clave `service_role` en estas apps.

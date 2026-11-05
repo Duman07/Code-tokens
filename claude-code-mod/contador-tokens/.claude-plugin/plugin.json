@@ -12,8 +12,8 @@
     },
     "supabase_anon_key": {
       "type": "string",
-      "title": "Supabase: clave anon (pública)",
-      "description": "Project Settings → API → anon public.",
+      "title": "Supabase: clave pública (publishable o anon)",
+      "description": "Project Settings → API Keys → Publishable key (sb_publishable_…) o la anon antigua (eyJ…).",
       "default": ""
     },
     "token_dispositivo": {
