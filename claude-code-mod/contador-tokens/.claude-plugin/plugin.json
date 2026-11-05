@@ -1,0 +1,27 @@
+{
+  "name": "contador-tokens",
+  "version": "0.2.0",
+  "description": "Panel con el conteo de tokens de la sesión: contexto, totales por turno, costo y límites; sincroniza con Supabase",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "supabase_url": {
+      "type": "string",
+      "title": "Supabase: URL del proyecto",
+      "description": "Por ejemplo https://abcd1234.supabase.co. Vacío: no sincroniza.",
+      "default": ""
+    },
+    "supabase_anon_key": {
+      "type": "string",
+      "title": "Supabase: clave anon (pública)",
+      "description": "Project Settings → API → anon public.",
+      "default": ""
+    },
+    "token_dispositivo": {
+      "type": "string",
+      "title": "Token de dispositivo",
+      "description": "El que genera la app de Windows en Ajustes (empieza por ctk_).",
+      "sensitive": true,
+      "default": ""
+    }
+  }
+}

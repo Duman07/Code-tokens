@@ -1,0 +1,12 @@
+# Windows (Tauri)
+windows/src-tauri/target/
+windows/src-tauri/gen/
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.iml
+# Mod
+claude-code-mod/*/.claude-plugin/types/

@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Tokens</string>
+    <string name="widget_nombre">Tokens de Claude</string>
+    <string name="widget_descripcion">Contexto y límites de uso de Claude Code</string>
+</resources>

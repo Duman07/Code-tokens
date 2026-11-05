@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tokens</title>
+  <link rel="stylesheet" href="estilo.css" />
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <!-- Primera vez: datos del proyecto de Supabase y tu cuenta -->
+  <section id="vista-entrar" hidden>
+    <h1>Contador de tokens</h1>
+    <p class="tenue">Conecta con tu proyecto de Supabase.</p>
+    <form id="form-entrar">
+      <label>URL del proyecto<input name="url" placeholder="https://xxxx.supabase.co" required /></label>
+      <label>Clave anon (pública)<input name="clave" required /></label>
+      <label>Correo<input name="correo" type="email" autocomplete="username" required /></label>
+      <label>Contraseña<input name="clave_usuario" type="password" autocomplete="current-password" required /></label>
+      <button type="submit">Entrar</button>
+      <p id="error-entrar" class="error"></p>
+    </form>
+  </section>
+
+  <!-- Panel -->
+  <section id="vista-panel" hidden>
+    <header>
+      <select id="sesiones" title="Sesión de Claude Code"></select>
+      <button id="btn-ajustes" class="icono" title="Ajustes">⚙</button>
+    </header>
+    <div id="contenido"></div>
+    <footer id="estado" class="tenue"></footer>
+  </section>
+
+  <!-- Ajustes -->
+  <section id="vista-ajustes" hidden>
+    <header><h2>Ajustes</h2><button id="btn-volver" class="icono" title="Volver">✕</button></header>
+    <p class="tenue" id="cuenta"></p>
+
+    <h3>Conectar Claude Code</h3>
+    <p class="tenue">Genera un token para este equipo y pégalo en Claude Code: <code>/config</code> → contador-tokens → Token de dispositivo. También van ahí la URL y la clave anon.</p>
+    <label>Nombre del equipo<input id="nombre-equipo" value="Mi PC" /></label>
+    <button id="btn-token">Generar token</button>
+    <div id="token-generado" hidden>
+      <p>Cópialo ahora; no se vuelve a mostrar:</p>
+      <code id="token-texto" class="token"></code>
+      <button id="btn-copiar">Copiar</button>
+    </div>
+
+    <h3>Equipos conectados</h3>
+    <ul id="equipos"></ul>
+
+    <h3>Ventana</h3>
+    <label class="fila"><input type="checkbox" id="compacto" /> Modo compacto (solo contexto y límites)</label>
+
+    <button id="btn-salir" class="secundario">Cerrar sesión</button>
+  </section>
+</body>
+</html>
