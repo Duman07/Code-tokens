@@ -24,7 +24,8 @@ android {
         // IDs de PRUEBA de Google: muestran anuncios de prueba y no generan ingresos. Los reales van en
         // local.properties (ADMOB_APP_ID=ca-app-pub-…~…, ADMOB_BANNER=ca-app-pub-…/…).
         manifestPlaceholders["admobAppId"] = ajuste("ADMOB_APP_ID").ifEmpty { "ca-app-pub-3940256099942544~3347511713" }
-        // Sin IDs reales, el release no muestra anuncios (el debug sí, con los de prueba, para ver el diseño).
+        // Sin IDs reales no se muestran anuncios, ni en debug ni en release. Para ver el diseño con anuncios de prueba,
+        // pon en local.properties los IDs de prueba de Google (ver README).
         buildConfigField("boolean", "ADS_REALES", "${ajuste("ADMOB_APP_ID").isNotEmpty() && ajuste("ADMOB_BANNER").isNotEmpty()}")
         buildConfigField("String", "ADMOB_BANNER", "\"${ajuste("ADMOB_BANNER").ifEmpty { "ca-app-pub-3940256099942544/9214589741" }}\"")
         buildConfigField("String", "SUPABASE_URL", "\"${ajuste("SUPABASE_URL")}\"")

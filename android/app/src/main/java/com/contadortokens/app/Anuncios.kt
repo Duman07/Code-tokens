@@ -40,7 +40,7 @@ object Anuncios {
     private val iniciado = AtomicBoolean(false)
 
     fun iniciar(actividad: Activity) {
-        if (!BuildConfig.DEBUG && !BuildConfig.ADS_REALES) return // todavía sin cuenta de AdMob aprobada
+        if (!BuildConfig.ADS_REALES) return // sin IDs reales de AdMob no se muestra ni se inicia nada
         val info = UserMessagingPlatform.getConsentInformation(actividad)
         info.requestConsentInfoUpdate(
             actividad, ConsentRequestParameters.Builder().build(),

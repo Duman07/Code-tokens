@@ -107,3 +107,17 @@ o abre la app, que actualiza cada 60 s.
 - No ve el uso del chat de claude.ai ni de la app de Claude por sí solo. Los porcentajes de los límites sí
   lo incluyen, pero solo se renuevan cuando una sesión de Claude Code termina un turno.
 - Las sesiones de más de 30 días se borran solas.
+
+## Textos legales en la web (para Google Play)
+
+`python3 tools/exportar_legal.py` genera `docs/` (privacidad, términos y eliminar cuenta) a partir de
+`Legal.kt`, así la app y la web dicen lo mismo. Vuelve a ejecutarlo cada vez que cambies los textos.
+Para publicarlo: en GitHub, **Settings → Pages → Deploy from a branch → `main` / `docs`**. Las URLs quedan en
+`https://<usuario>.github.io/<repositorio>/privacidad.html` (y `terminos.html`, `eliminar-cuenta.html`).
+Play Console pide la de privacidad y la de eliminar cuenta.
+
+## Anuncios (apagados por defecto)
+
+La app no muestra anuncios mientras no pongas en `android/local.properties` los IDs reales de AdMob
+(`ADMOB_APP_ID`, `ADMOB_BANNER`). Para ver el diseño con anuncios de prueba, usa los IDs de prueba de Google:
+`ADMOB_APP_ID=ca-app-pub-3940256099942544~3347511713` y `ADMOB_BANNER=ca-app-pub-3940256099942544/9214589741`.
