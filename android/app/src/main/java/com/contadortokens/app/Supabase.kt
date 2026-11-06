@@ -47,6 +47,44 @@ data class Uso(
     val historial: List<Turno>,
 )
 
+/** Lo que gastó una sesión en un día (hora local), sacado de consumo(). */
+data class ConsumoDia(
+    val dia: java.time.LocalDate,
+    val sesion: String,
+    val proyecto: String,
+    val dispositivo: String,
+    val entrada: Long,
+    val salida: Long,
+    val cacheLeida: Long,
+    val cacheEscrita: Long,
+    val costoUsd: Double,
+) {
+    val total get() = entrada + salida + cacheLeida + cacheEscrita
+}
+
+fun leerConsumo(texto: String): List<ConsumoDia> {
+    val arr = JSONArray(texto)
+    return (0 until arr.length()).mapNotNull { i ->
+        val o = arr.getJSONObject(i)
+        val dia = runCatching { java.time.LocalDate.parse(o.getString("dia")) }.getOrNull() ?: return@mapNotNull null
+        ConsumoDia(
+            dia = dia,
+            sesion = o.optString("sesion"),
+            proyecto = o.optString("proyecto").ifEmpty { "sesión" },
+            dispositivo = o.optString("dispositivo"),
+            entrada = o.optLong("entrada"),
+            salida = o.optLong("salida"),
+            cacheLeida = o.optLong("cache_leida"),
+            cacheEscrita = o.optLong("cache_escrita"),
+            costoUsd = o.optDouble("costo_usd", 0.0).let { if (it.isNaN()) 0.0 else it },
+        )
+    }
+}
+
+/** Primer día que hace falta para «este mes» y «esta semana» (la semana empieza el lunes). */
+fun inicioConsumo(hoy: java.time.LocalDate = java.time.LocalDate.now()): java.time.LocalDate =
+    minOf(hoy.withDayOfMonth(1), hoy.with(java.time.DayOfWeek.MONDAY))
+
 private fun JSONObject.long(k: String) = if (isNull(k)) null else optLong(k)
 private fun JSONObject.texto(k: String) = if (isNull(k)) null else optString(k)
 
@@ -106,11 +144,18 @@ fun haceCuanto(ms: Long): String {
     }
 }
 
+/** Texto corto del estado según el porcentaje. */
+fun estadoDe(p: Int): String = when {
+    p >= 85 -> "Casi lleno"
+    p >= 60 -> "Atento"
+    else -> "Con espacio"
+}
+
 /** Verde hasta 60 %, amarillo hasta 85 %, rojo después: en ARGB. */
 fun colorDe(p: Int): Long = when {
-    p >= 85 -> 0xFFF85149
-    p >= 60 -> 0xFFD29922
-    else -> 0xFF3FB950
+    p >= 85 -> 0xFFF87171
+    p >= 60 -> 0xFFFBBF24
+    else -> 0xFF34D399
 }
 
 // ---------- Cliente de Supabase (REST, sin librerías) ----------
@@ -141,6 +186,43 @@ class Supabase(context: Context) {
         val lista = leerUso(texto)
         prefs.edit().putString("cache", texto).putLong("cargado", System.currentTimeMillis()).apply()
         return lista
+    }
+
+    fun consumoEnCache(): List<ConsumoDia> =
+        runCatching { leerConsumo(prefs.getString("consumo", "[]")!!) }.getOrDefault(emptyList())
+
+    /** Consumo por día y sesión desde el lunes o el día 1, lo que sea antes. */
+    suspend fun consumo(): List<ConsumoDia> {
+        val zona = java.time.ZoneId.systemDefault()
+        val desde = inicioConsumo().atStartOfDay(zona).toOffsetDateTime().toString()
+        val cuerpo = JSONObject().put("p_desde", desde).put("p_zona", zona.id).toString()
+        val texto = try {
+            pedir("POST", "/rest/v1/rpc/consumo", cuerpo)
+        } catch (e: Exception) {
+            if (e.message.orEmpty().contains("consumo")) {
+                throw Exception("Falta actualizar Supabase: vuelve a ejecutar supabase/esquema.sql en el SQL Editor.")
+            }
+            throw e
+        }
+        val lista = leerConsumo(texto)
+        prefs.edit().putString("consumo", texto).apply()
+        return lista
+    }
+
+    /** Borra una sesión: su fila y su consumo por hora. */
+    suspend fun borrarSesion(sesion: String) {
+        val id = java.net.URLEncoder.encode(sesion, "UTF-8")
+        pedir("DELETE", "/rest/v1/uso_hora?sesion=eq.$id")
+        pedir("DELETE", "/rest/v1/uso_sesion?sesion=eq.$id")
+        quitarDeCache("cache", sesion)
+        quitarDeCache("consumo", sesion)
+    }
+
+    private fun quitarDeCache(clave: String, sesion: String) {
+        val arr = JSONArray(prefs.getString(clave, "[]"))
+        val quedan = JSONArray()
+        for (i in 0 until arr.length()) arr.getJSONObject(i).let { if (it.optString("sesion") != sesion) quedan.put(it) }
+        prefs.edit().putString(clave, quedan.toString()).apply()
     }
 
     private suspend fun auth(tipo: String, cuerpo: JSONObject): JSONObject {
@@ -176,12 +258,17 @@ class Supabase(context: Context) {
         }
     }
 
-    private suspend fun pedir(metodo: String, ruta: String): String {
+    private suspend fun pedir(metodo: String, ruta: String, cuerpo: String? = null): String {
         if (!conectado) throw Exception("Sin sesión")
         if (System.currentTimeMillis() > prefs.getLong("expira", 0) - 60_000) renovar()
         suspend fun una() = http(
             metodo, "$url$ruta",
-            mapOf("apikey" to clave, "Authorization" to "Bearer ${prefs.getString("access", "")}"),
+            buildMap {
+                put("apikey", clave)
+                put("Authorization", "Bearer ${prefs.getString("access", "")}")
+                if (cuerpo != null) put("Content-Type", "application/json")
+            },
+            cuerpo,
         )
         var (codigo, texto) = una()
         if (codigo == 401) {

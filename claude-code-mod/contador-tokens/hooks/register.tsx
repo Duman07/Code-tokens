@@ -221,9 +221,20 @@ function leerConfig(options: Record<string, unknown>): Config | undefined {
   return url && clave && token ? { url, clave, token } : undefined
 }
 
+/** Tokens de las peticiones del turno que sigue en curso: aún no están en `totales`. */
+type Parcial = { entrada: number; salida: number; cacheLeida: number; cacheEscrita: number }
+const SIN_PARCIAL: Parcial = { entrada: 0, salida: 0, cacheLeida: 0, cacheEscrita: 0 }
+
 /** Lo que se manda a reportar_uso(): la foto actual de la sesión. */
-export function paquete(s: Sesion, t: Totales, m: Medida, hist: Turno[]) {
-  const { ultimo, ...suma } = t
+export function paquete(s: Sesion, t: Totales, m: Medida, hist: Turno[], enCurso: Parcial = SIN_PARCIAL) {
+  const { ultimo, ...acumulado } = t
+  const suma = {
+    ...acumulado,
+    entrada: acumulado.entrada + enCurso.entrada,
+    salida: acumulado.salida + enCurso.salida,
+    cacheLeida: acumulado.cacheLeida + enCurso.cacheLeida,
+    cacheEscrita: acumulado.cacheEscrita + enCurso.cacheEscrita,
+  }
   return {
     sesion: s.id,
     proyecto: s.proyecto,
@@ -238,11 +249,19 @@ export function paquete(s: Sesion, t: Totales, m: Medida, hist: Turno[]) {
   }
 }
 
+// Estado del turno en curso. Vive en el módulo: si el mod se recarga, se pierde solo
+// lo que va del turno, y `turn.complete` lo cuenta igual al terminar.
+let enCurso: Parcial = SIN_PARCIAL
+let ultimoEnvio = 0
+/** Durante una respuesta larga, como mucho un envío cada tanto. */
+const ENVIO_EN_CURSO_MS = 30_000
+
 async function sincronizar($: EngineInterface, config: Config | undefined) {
   if (!config) return
   const s = await read($, sesion)
   if (!s.id) return
-  const cuerpo = paquete(s, await read($, totales), await read($, medida), await read($, historial))
+  ultimoEnvio = Date.now()
+  const cuerpo = paquete(s, await read($, totales), await read($, medida), await read($, historial), enCurso)
   try {
     const r = await $.http.fetch(`${config.url}/rest/v1/rpc/reportar_uso`, {
       method: 'POST',
@@ -306,9 +325,33 @@ export const register: Register = (on, options) => {
     return res
   })
 
+  // Mientras Claude trabaja (respuestas largas con muchas herramientas), cada petición al
+  // modelo suma a `enCurso` y, cada 30 s como mucho, se manda la foto a Supabase.
+  // Sin esto, el teléfono solo se enteraba al terminar la respuesta entera.
+  on('turn.step', async function* ($, e, next) {
+    const r = yield* next(e)
+    if (e.agentId === undefined && r.usage) {
+      enCurso = {
+        entrada: enCurso.entrada + r.usage.input_tokens,
+        salida: enCurso.salida + r.usage.output_tokens,
+        cacheLeida: enCurso.cacheLeida + r.usage.cache_read_input_tokens,
+        cacheEscrita: enCurso.cacheEscrita + r.usage.cache_creation_input_tokens,
+      }
+    }
+    if (config && Date.now() - ultimoEnvio >= ENVIO_EN_CURSO_MS) {
+      ultimoEnvio = Date.now()
+      const uso = await $.session.usage()
+      await update($, medida, () => aMedida(uso.context, uso.rateLimits, uso.cost))
+      void sincronizar($, config)
+    }
+    return r
+  })
+
   // Tokens de cada turno, sumados: los del hilo principal y los de los subagentes.
   on('turn.complete', async ($, e, next) => {
     const uso = e.usage
+    // El turno principal terminó: su suma completa entra en `totales`.
+    if (!e.agentId) enCurso = SIN_PARCIAL
     if (uso) {
       await update($, totales, t => ({
         entrada: t.entrada + uso.input_tokens,

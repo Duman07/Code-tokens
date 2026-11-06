@@ -25,6 +25,10 @@ App de Windows (Tauri)          App + widget de Android (Kotlin / Glance)
 La clave publishable (o anon) es pública: con ella solo se puede iniciar sesión o llamar a `reportar_uso` con un token válido.
 Nunca uses la clave `service_role` en estas apps.
 
+**Al actualizar:** si ya tenías el esquema, vuelve a pegar `supabase/esquema.sql` y pulsa **Run**. Se puede
+ejecutar varias veces sin perder datos. Así se crea, por ejemplo, la tabla `uso_hora` que usa la pestaña
+**Consumo** de Android (día, semana, mes y por sesión).
+
 ## 2. App de Windows
 
 En una PC con Windows:
