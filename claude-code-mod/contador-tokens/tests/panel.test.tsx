@@ -163,3 +163,24 @@ test('sin configurar no envía nada', async ($, on) => {
   expect(await ui.find({ type: 'Text', text: /incroniz/ })).toBeUndefined()
   await ui.unmount()
 })
+
+test('vincular canjea el código y envía con ese token', { options: { supabase_url: 'https://demo.supabase.co', supabase_anon_key: 'anon-123' } }, async ($, on) => {
+  const envios: { url: string; init: any }[] = []
+  const guardado = new Map<string, unknown>()
+  on('store.set', (_: any, e: any) => { guardado.set(e.key, e.value); return { value: undefined } })
+  on('store.get', (_: any, e: any) => ({ value: guardado.get(e.key) }))
+  on('http.fetch', (_: any, e: any) => {
+    envios.push(e)
+    const texto = e.url.endsWith('canjear_codigo_vinculo') ? '"ctk_nuevo"' : ''
+    return { value: { status: 200, ok: true, headers: {}, text: texto } }
+  })
+  await preparar($, on)
+  const r = await $.command.run({ command: 'tokens', args: 'vincular abcd-2345' })
+  expect(r.text).toMatch(/Vinculado/)
+  expect(JSON.parse(envios[0].init.body).p_codigo).toBe('abcd-2345')
+  expect(guardado.get('token_dispositivo')).toBe('ctk_nuevo')
+  await $.session.measure({ context: { tokens: 1, window: 200000, percent: 1 }, rateLimits: [], cost: { usd: 1 }, changed: ['cost'] })
+  await new Promise(r => setTimeout(r, 20))
+  const rep = envios.find(e => e.url.endsWith('reportar_uso'))
+  expect(JSON.parse(rep!.init.body).p_token).toBe('ctk_nuevo')
+})

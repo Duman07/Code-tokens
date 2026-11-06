@@ -122,6 +122,12 @@ fun leerUso(texto: String): List<Uso> {
     }
 }
 
+data class Cuenta(val id: String, val proveedor: String, val etiqueta: String)
+
+val PROVEEDORES = listOf("claude" to "Claude", "codex" to "Codex", "cursor" to "Cursor", "antigravity" to "Antigravity", "otro" to "Otro")
+
+data class Llave(val id: String, val nombre: String, val creado: String, val usado: String?)
+
 // ---------- Formatos ----------
 
 fun numero(n: Long): String =
@@ -163,22 +169,118 @@ fun colorDe(p: Int): Long = when {
 class Supabase(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("contador-tokens", Context.MODE_PRIVATE)
 
-    val url get() = prefs.getString("url", "") ?: ""
-    val clave get() = prefs.getString("clave", "") ?: ""
+    /** Lo que eligió el usuario («Servidor propio») o, si no, el servidor compartido de la app. */
+    val url get() = prefs.getString("url", "").orEmpty().ifEmpty { BuildConfig.SUPABASE_URL }
+    val clave get() = prefs.getString("clave", "").orEmpty().ifEmpty { BuildConfig.SUPABASE_KEY }
+    val hayServidor get() = BuildConfig.SUPABASE_URL.isNotEmpty() && BuildConfig.SUPABASE_KEY.isNotEmpty()
     val correo get() = prefs.getString("correo", "") ?: ""
-    val conectado get() = !prefs.getString("refresh", null).isNullOrEmpty()
+    val conectado get() = Boveda.descifrar(prefs.getString("refresh", null)) != null
+    private val acceso get() = Boveda.descifrar(prefs.getString("access", null)).orEmpty()
+    private val refresco get() = Boveda.descifrar(prefs.getString("refresh", null)).orEmpty()
 
     /** Última lista descargada, para el widget y para abrir la app sin red. */
     fun enCache(): List<Uso> = runCatching { leerUso(prefs.getString("cache", "[]")!!) }.getOrDefault(emptyList())
 
+    /** `url` y `clave` vacías: usa el servidor compartido de la app. */
+    private fun fijarServidor(url: String, clave: String) {
+        if (url.isNotBlank() && clave.isNotBlank()) {
+            prefs.edit().putString("url", soloDominio(url)).putString("clave", clave.trim()).apply()
+        } else if (!hayServidor) {
+            throw Exception("Falta la URL y la clave del servidor.")
+        } else {
+            prefs.edit().remove("url").remove("clave").apply()
+        }
+    }
+
     suspend fun entrar(url: String, clave: String, correo: String, contrasena: String) {
-        prefs.edit().putString("url", soloDominio(url)).putString("clave", clave.trim()).apply()
+        fijarServidor(url, clave)
         val cuerpo = JSONObject().put("email", correo.trim()).put("password", contrasena)
         guardarSesion(auth("password", cuerpo))
     }
 
+    /** Crea una cuenta nueva. Si el servidor pide confirmar el correo, lo dice y no inicia sesión. */
+    suspend fun registrar(url: String, clave: String, correo: String, contrasena: String) {
+        fijarServidor(url, clave)
+        if (contrasena.length < 8) throw Exception("La contraseña debe tener al menos 8 caracteres.")
+        val (codigo, texto) = http(
+            "POST", "${this.url}/auth/v1/signup",
+            mapOf("apikey" to this.clave, "Content-Type" to "application/json"),
+            JSONObject().put("email", correo.trim()).put("password", contrasena).toString(),
+        )
+        val json = runCatching { JSONObject(texto) }.getOrDefault(JSONObject())
+        if (codigo !in 200..299) {
+            throw Exception(
+                json.optString("msg").ifEmpty { json.optString("error_description") }
+                    .ifEmpty { json.optString("message") }.ifEmpty { "HTTP $codigo" },
+            )
+        }
+        if (json.optString("access_token").isEmpty()) {
+            throw Exception("Cuenta creada. Revisa tu correo para confirmarla y luego entra.")
+        }
+        guardarSesion(json)
+    }
+
+    /** Código de 8 caracteres (10 min) para `/tokens vincular CÓDIGO` en Claude Code. */
+    suspend fun crearCodigo(cuenta: String? = null): String =
+        pedir(
+            "POST", "/rest/v1/rpc/crear_codigo_vinculo",
+            JSONObject().apply { if (cuenta != null) put("p_cuenta", cuenta) }.toString(),
+        ).trim().trim('"')
+
+    suspend fun cuentas(): List<Cuenta> {
+        val arr = JSONArray(pedir("GET", "/rest/v1/cuentas_ia?select=id,proveedor,etiqueta&order=creado.asc"))
+        return (0 until arr.length()).map {
+            val o = arr.getJSONObject(it)
+            Cuenta(o.optString("id"), o.optString("proveedor"), o.optString("etiqueta"))
+        }
+    }
+
+    /** Una sola cuenta de Claude por usuario; de los demás proveedores, las que quiera (el servidor lo aplica). */
+    suspend fun crearCuenta(proveedor: String, etiqueta: String) {
+        pedir(
+            "POST", "/rest/v1/rpc/crear_cuenta_ia",
+            JSONObject().put("p_proveedor", proveedor).put("p_etiqueta", etiqueta).toString(),
+        )
+    }
+
+    /** Quita la cuenta y sus llaves; el consumo ya guardado se conserva. */
+    suspend fun quitarCuenta(id: String) {
+        pedir("DELETE", "/rest/v1/cuentas_ia?id=eq.${java.net.URLEncoder.encode(id, "UTF-8")}")
+    }
+
+    /** Llave de dispositivo nueva (`ctk_…`): solo se ve esta vez. */
+    suspend fun crearLlave(nombre: String): String =
+        pedir("POST", "/rest/v1/rpc/crear_token_dispositivo", JSONObject().put("p_nombre", nombre).toString()).trim().trim('"')
+
+    suspend fun llaves(): List<Llave> {
+        val arr = JSONArray(pedir("GET", "/rest/v1/tokens_dispositivo?select=id,nombre,creado,usado&order=creado.desc"))
+        return (0 until arr.length()).map {
+            val o = arr.getJSONObject(it)
+            Llave(o.optString("id"), o.optString("nombre"), o.optString("creado"), o.texto("usado"))
+        }
+    }
+
+    /** Revoca una llave: el Claude Code que la usaba deja de sincronizar. */
+    suspend fun revocarLlave(id: String) {
+        pedir("DELETE", "/rest/v1/tokens_dispositivo?id=eq.${java.net.URLEncoder.encode(id, "UTF-8")}")
+    }
+
+    /** Borra la cuenta y todos sus datos en el servidor, y cierra la sesión. */
+    suspend fun eliminarCuenta() {
+        pedir("POST", "/rest/v1/rpc/eliminar_mi_cuenta", "{}")
+        salir()
+        prefs.edit().remove("correo").apply()
+    }
+
+    /** Equipos con token: nombre y último uso. */
+    suspend fun dispositivos(): List<Pair<String, String?>> {
+        val arr = JSONArray(pedir("GET", "/rest/v1/tokens_dispositivo?select=nombre,usado&order=creado.desc"))
+        return (0 until arr.length()).map { arr.getJSONObject(it).let { o -> o.optString("nombre") to o.texto("usado") } }
+    }
+
     fun salir() {
-        prefs.edit().remove("access").remove("refresh").remove("expira").remove("cache").apply()
+        // Todo lo de la cuenta sale del teléfono: otra persona que entre después no ve nada de la anterior.
+        prefs.edit().remove("access").remove("refresh").remove("expira").remove("cache").remove("consumo").remove("cargado").apply()
     }
 
     suspend fun cargar(): List<Uso> {
@@ -242,8 +344,8 @@ class Supabase(context: Context) {
 
     private fun guardarSesion(json: JSONObject) {
         prefs.edit()
-            .putString("access", json.getString("access_token"))
-            .putString("refresh", json.getString("refresh_token"))
+            .putString("access", Boveda.cifrar(json.getString("access_token")))
+            .putString("refresh", Boveda.cifrar(json.getString("refresh_token")))
             .putLong("expira", System.currentTimeMillis() + json.optLong("expires_in", 3600) * 1000)
             .putString("correo", json.optJSONObject("user")?.optString("email") ?: correo)
             .apply()
@@ -251,7 +353,7 @@ class Supabase(context: Context) {
 
     private suspend fun renovar() {
         try {
-            guardarSesion(auth("refresh_token", JSONObject().put("refresh_token", prefs.getString("refresh", ""))))
+            guardarSesion(auth("refresh_token", JSONObject().put("refresh_token", refresco)))
         } catch (e: Exception) {
             salir()
             throw Exception("La sesión venció; vuelve a entrar.")
@@ -265,7 +367,7 @@ class Supabase(context: Context) {
             metodo, "$url$ruta",
             buildMap {
                 put("apikey", clave)
-                put("Authorization", "Bearer ${prefs.getString("access", "")}")
+                put("Authorization", "Bearer $acceso")
                 if (cuerpo != null) put("Content-Type", "application/json")
             },
             cuerpo,
@@ -307,5 +409,7 @@ internal fun soloDominio(url: String): String {
     val limpio = url.trim()
     val conEsquema = if (limpio.contains("://")) limpio else "https://$limpio"
     val uri = android.net.Uri.parse(conEsquema)
-    return "${uri.scheme ?: "https"}://${uri.host ?: limpio}"
+    // Siempre https: las contraseñas y los tokens nunca viajan sin cifrar.
+    if (uri.scheme != "https") throw Exception("El servidor debe usar https://")
+    return "https://${uri.host ?: limpio}"
 }

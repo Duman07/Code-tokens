@@ -214,11 +214,56 @@ function abrir($: EngineInterface) {
 
 type Config = { url: string; clave: string; token: string }
 
-function leerConfig(options: Record<string, unknown>): Config | undefined {
-  const url = String(options.supabase_url ?? '').trim().replace(/\/+$/, '')
-  const clave = String(options.supabase_anon_key ?? '').trim()
-  const token = String(options.token_dispositivo ?? '').trim()
-  return url && clave && token ? { url, clave, token } : undefined
+/** Servidor compartido de la app: así nadie tiene que montar su propio Supabase.
+ *  Quien publique la app pone aquí la URL y la clave publishable (son públicas). */
+const SERVIDOR = {
+  url: 'https://yfkranlvpwonegcdcupc.supabase.co',
+  clave: 'sb_publishable_VcKurmw2aJbBxxl7GLsUaw_3gjSY4P0',
+}
+
+type Servidor = { url: string; clave: string }
+
+function leerServidor(options: Record<string, unknown>): Servidor | undefined {
+  const url = String(options.supabase_url ?? '').trim().replace(/\/+$/, '') || SERVIDOR.url
+  const clave = String(options.supabase_anon_key ?? '').trim() || SERVIDOR.clave
+  return url && clave ? { url, clave } : undefined
+}
+
+/** El token viene de `/tokens vincular CÓDIGO` (guardado entre sesiones) o, si se prefiere, de /config. */
+async function leerConfig($: EngineInterface, options: Record<string, unknown>): Promise<Config | undefined> {
+  const servidor = leerServidor(options)
+  if (!servidor) return undefined
+  // Si el almacén falla, simplemente no hay token: nunca debe frenar a Claude Code.
+  const guardado = await $.store.get('token_dispositivo').catch(() => undefined)
+  const token = String(options.token_dispositivo ?? '').trim() || String(guardado ?? '')
+  return token ? { ...servidor, token } : undefined
+}
+
+/** Canjea el código que muestra la app por un token de dispositivo y lo guarda. */
+async function vincular($: EngineInterface, options: Record<string, unknown>, codigo: string): Promise<string> {
+  const servidor = leerServidor(options)
+  if (!servidor) return 'Este mod no tiene servidor configurado: pon la URL y la clave en /config → contador-tokens.'
+  if (!codigo.trim()) return 'Uso: /tokens vincular CÓDIGO (el código lo muestra la app, en «Vincular Claude Code»).'
+  try {
+    const r = await $.http.fetch(`${servidor.url}/rest/v1/rpc/canjear_codigo_vinculo`, {
+      method: 'POST',
+      headers: { apikey: servidor.clave, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_codigo: codigo, p_nombre: `Claude Code (${new Date().toISOString().slice(0, 10)})` }),
+    })
+    if (!r.ok) {
+      let mensaje = `HTTP ${r.status}`
+      try {
+        mensaje = JSON.parse(r.text).message ?? mensaje
+      } catch {}
+      return `No se pudo vincular: ${mensaje}`
+    }
+    const token = JSON.parse(r.text)
+    if (typeof token !== 'string' || !token.startsWith('ctk_')) return 'No se pudo vincular: respuesta inesperada.'
+    await $.store.set('token_dispositivo', token)
+    return 'Vinculado. Tus próximos turnos se verán en la app.'
+  } catch (err) {
+    return `No se pudo vincular: ${String(err).slice(0, 120)}`
+  }
 }
 
 /** Tokens de las peticiones del turno que sigue en curso: aún no están en `totales`. */
@@ -256,7 +301,8 @@ let ultimoEnvio = 0
 /** Durante una respuesta larga, como mucho un envío cada tanto. */
 const ENVIO_EN_CURSO_MS = 30_000
 
-async function sincronizar($: EngineInterface, config: Config | undefined) {
+async function sincronizar($: EngineInterface, options: Record<string, unknown>) {
+  const config = await leerConfig($, options)
   if (!config) return
   const s = await read($, sesion)
   if (!s.id) return
@@ -297,11 +343,9 @@ function textoSync(s: Sync, activa: boolean): string | undefined {
 }
 
 export const register: Register = (on, options) => {
-  const config = leerConfig(options)
-
   on('session.start', async ($, e, next) => {
     const res = await next(e)
-    await $.command.register({ name: 'tokens', description: 'Abre el panel con el conteo de tokens de la sesión' })
+    await $.command.register({ name: 'tokens', description: 'Panel de tokens. «vincular CÓDIGO» conecta con tu cuenta de la app' })
     const uso = await $.session.usage()
     await update($, medida, () => aMedida(uso.context, uso.rateLimits, uso.cost))
     // startedAt no cambia al recargar el mod: la misma sesión sigue en la misma fila.
@@ -311,7 +355,13 @@ export const register: Register = (on, options) => {
     return res
   })
 
-  on('command.run', { command: 'tokens' }, async $ => {
+  on('command.run', { command: 'tokens' }, async ($, e) => {
+    const [accion = '', ...resto] = e.args.trim().split(/\s+/)
+    if (accion === 'vincular') return { text: await vincular($, options, resto.join('')) }
+    if (accion === 'desvincular') {
+      await $.store.delete('token_dispositivo')
+      return { text: 'Desvinculado de este equipo. Quita también el dispositivo en la app si quieres revocar el token.' }
+    }
     await abrir($)
     return { text: 'Panel de tokens abierto.' }
   })
@@ -321,7 +371,7 @@ export const register: Register = (on, options) => {
     await update($, medida, () => aMedida(e.context, e.rateLimits, e.cost))
     const res = await next(e)
     // Sin esperar: la red no frena a Claude Code.
-    void sincronizar($, config)
+    void sincronizar($, options)
     return res
   })
 
@@ -338,11 +388,11 @@ export const register: Register = (on, options) => {
         cacheEscrita: enCurso.cacheEscrita + r.usage.cache_creation_input_tokens,
       }
     }
-    if (config && Date.now() - ultimoEnvio >= ENVIO_EN_CURSO_MS) {
+    if (Date.now() - ultimoEnvio >= ENVIO_EN_CURSO_MS && (await leerConfig($, options))) {
       ultimoEnvio = Date.now()
       const uso = await $.session.usage()
       await update($, medida, () => aMedida(uso.context, uso.rateLimits, uso.cost))
-      void sincronizar($, config)
+      void sincronizar($, options)
     }
     return r
   })
@@ -386,7 +436,7 @@ export const register: Register = (on, options) => {
     const t = await read($, totales)
     const m = await read($, medida)
     const hist = await read($, historial)
-    const lineaSync = textoSync(await read($, sync), config !== undefined)
+    const lineaSync = textoSync(await read($, sync), (await leerConfig($, options)) !== undefined)
     const total = t.entrada + t.salida + t.cacheLeida + t.cacheEscrita
     const pct = m.porcentaje ?? 0
     const reiniciar = () => update($, totales, () => VACIO).then(() => update($, historial, () => []))

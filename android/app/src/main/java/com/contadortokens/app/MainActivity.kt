@@ -42,11 +42,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -62,6 +64,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -80,12 +84,29 @@ import kotlinx.coroutines.launch
 
 // ---------- Paleta ----------
 
-internal val FONDO = Color(0xFF0A0A14)
-internal val TARJETA = Color(0xFF15151F)
-internal val BORDE = Color(0x14FFFFFF)
-internal val VACIO = Color(0xFF262636)
-internal val TEXTO = Color(0xFFF4F4FA)
-internal val TENUE = Color(0xFF8E8EA8)
+/** Modo de color: «sistema», «oscuro» o «claro». Se guarda en las preferencias. */
+object Tema {
+    var modo by mutableStateOf("sistema")
+    var sistemaOscuro by mutableStateOf(true)
+    val oscuro get() = when (modo) { "claro" -> false; "oscuro" -> true; else -> sistemaOscuro }
+
+    fun cargar(c: android.content.Context) {
+        modo = c.getSharedPreferences("contador-tokens", android.content.Context.MODE_PRIVATE).getString("tema", "sistema") ?: "sistema"
+    }
+    fun elegir(c: android.content.Context, nuevo: String) {
+        modo = nuevo
+        c.getSharedPreferences("contador-tokens", android.content.Context.MODE_PRIVATE).edit().putString("tema", nuevo).apply()
+    }
+}
+
+// Estos colores cambian con el modo: leerlos dentro de un @Composable los vuelve a pintar al cambiarlo.
+internal val FONDO get() = if (Tema.oscuro) Color(0xFF0A0A14) else Color(0xFFF4F4FA)
+internal val TARJETA get() = if (Tema.oscuro) Color(0xFF15151F) else Color(0xFFFFFFFF)
+internal val BORDE get() = if (Tema.oscuro) Color(0x14FFFFFF) else Color(0x1A000000)
+internal val VACIO get() = if (Tema.oscuro) Color(0xFF262636) else Color(0xFFE2E2EE)
+internal val TEXTO get() = if (Tema.oscuro) Color(0xFFF4F4FA) else Color(0xFF15151F)
+internal val TENUE get() = if (Tema.oscuro) Color(0xFF8E8EA8) else Color(0xFF5F5F78)
+
 internal val ERROR = Color(0xFFF87171)
 internal val ENTRADA = Color(0xFF60A5FA)
 internal val SALIDA = Color(0xFFA78BFA)
@@ -103,8 +124,21 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val supabase = Supabase(this)
         Actualizador.programar(this)
+        Tema.cargar(this)
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme(background = FONDO, surface = TARJETA, primary = SALIDA)) {
+            Tema.sistemaOscuro = androidx.compose.foundation.isSystemInDarkTheme()
+            SideEffect {
+                val transparente = android.graphics.Color.TRANSPARENT
+                enableEdgeToEdge(
+                    statusBarStyle = if (Tema.oscuro) androidx.activity.SystemBarStyle.dark(transparente)
+                    else androidx.activity.SystemBarStyle.light(transparente, transparente),
+                    navigationBarStyle = if (Tema.oscuro) androidx.activity.SystemBarStyle.dark(transparente)
+                    else androidx.activity.SystemBarStyle.light(transparente, transparente),
+                )
+            }
+            val esquema = if (Tema.oscuro) darkColorScheme(background = FONDO, surface = TARJETA, primary = SALIDA)
+            else lightColorScheme(background = FONDO, surface = TARJETA, primary = VIOLETA)
+            MaterialTheme(colorScheme = esquema) {
                 Box(Modifier.fillMaxSize().background(FONDO)) {
                     Resplandor()
                     Box(Modifier.fillMaxSize().systemBarsPadding()) { App(supabase) }
@@ -119,9 +153,9 @@ class MainActivity : ComponentActivity() {
 private fun Resplandor() {
     Canvas(Modifier.fillMaxSize()) {
         val a = Offset(size.width * 0.15f, 0f)
-        drawCircle(Brush.radialGradient(listOf(VIOLETA.copy(alpha = 0.35f), Color.Transparent), a, size.width * 0.9f), size.width * 0.9f, a)
+        drawCircle(Brush.radialGradient(listOf(VIOLETA.copy(alpha = if (Tema.oscuro) 0.35f else 0.14f), Color.Transparent), a, size.width * 0.9f), size.width * 0.9f, a)
         val b = Offset(size.width, size.height * 0.35f)
-        drawCircle(Brush.radialGradient(listOf(AZUL.copy(alpha = 0.22f), Color.Transparent), b, size.width * 0.7f), size.width * 0.7f, b)
+        drawCircle(Brush.radialGradient(listOf(AZUL.copy(alpha = if (Tema.oscuro) 0.22f else 0.10f), Color.Transparent), b, size.width * 0.7f), size.width * 0.7f, b)
     }
 }
 
@@ -137,7 +171,11 @@ private fun App(supabase: Supabase) {
 private fun Principal(supabase: Supabase, alSalir: () -> Unit) {
     var pestana by remember { mutableStateOf(0) }
     Box(Modifier.fillMaxSize()) {
-        if (pestana == 0) Panel(supabase, alSalir) else Consumo(supabase)
+        when (pestana) {
+            0 -> Panel(supabase, alSalir)
+            1 -> Consumo(supabase)
+            else -> Ajustes(supabase, alSalir)
+        }
         BarraNavegacion(pestana, Modifier.align(Alignment.BottomCenter)) { pestana = it }
     }
 }
@@ -146,14 +184,14 @@ private fun Principal(supabase: Supabase, alSalir: () -> Unit) {
 private fun BarraNavegacion(elegida: Int, modifier: Modifier, alElegir: (Int) -> Unit) {
     val forma = RoundedCornerShape(50)
     Row(
-        modifier.padding(bottom = 12.dp).clip(forma).background(Color(0xF21B1B28)).border(1.dp, BORDE, forma).padding(6.dp),
+        modifier.padding(bottom = 12.dp).clip(forma).background(TARJETA.copy(alpha = 0.95f)).border(1.dp, BORDE, forma).padding(6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        listOf(Triple("Ahora", R.drawable.ic_rayo, 0), Triple("Consumo", R.drawable.ic_grafica, 1)).forEach { (nombre, icono, i) ->
+        listOf(Triple("Ahora", R.drawable.ic_rayo, 0), Triple("Consumo", R.drawable.ic_grafica, 1), Triple("Ajustes", R.drawable.ic_llave, 2)).forEach { (nombre, icono, i) ->
             val activa = i == elegida
             Row(
                 Modifier.clip(forma).background(if (activa) DEGRADADO else SolidColor(Color.Transparent))
-                    .clickable { alElegir(i) }.padding(horizontal = 20.dp, vertical = 11.dp),
+                    .clickable { alElegir(i) }.padding(horizontal = 16.dp, vertical = 11.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icono(icono, if (activa) Color.White else TENUE, 18.dp)
@@ -188,7 +226,7 @@ internal fun BotonRedondo(@DrawableRes id: Int, onClick: () -> Unit) {
 }
 
 @Composable
-private fun BotonDegradado(texto: String, habilitado: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun BotonDegradado(texto: String, habilitado: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
         modifier.height(54.dp).clip(RoundedCornerShape(18.dp))
             .background(if (habilitado) DEGRADADO else SolidColor(VACIO))
@@ -254,7 +292,7 @@ private fun Logo(tam: Dp) {
 // ---------- Entrar ----------
 
 @Composable
-private fun Campo(
+internal fun Campo(
     valor: String, cambio: (String) -> Unit, etiqueta: String, @DrawableRes icono: Int,
     tipo: KeyboardType = KeyboardType.Text, secreto: Boolean = false,
 ) {
@@ -278,8 +316,11 @@ private fun Campo(
 
 @Composable
 private fun Entrar(supabase: Supabase, alEntrar: () -> Unit) {
-    var url by remember { mutableStateOf(supabase.url) }
-    var clave by remember { mutableStateOf(supabase.clave) }
+    var crear by remember { mutableStateOf(false) }
+    // Con servidor compartido los campos de URL y clave quedan ocultos tras «Servidor propio».
+    var propio by remember { mutableStateOf(!supabase.hayServidor) }
+    var url by remember { mutableStateOf(if (supabase.hayServidor && supabase.url == BuildConfig.SUPABASE_URL) "" else supabase.url) }
+    var clave by remember { mutableStateOf(if (supabase.hayServidor && supabase.clave == BuildConfig.SUPABASE_KEY) "" else supabase.clave) }
     var correo by remember { mutableStateOf(supabase.correo) }
     var contrasena by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
@@ -295,22 +336,91 @@ private fun Entrar(supabase: Supabase, alEntrar: () -> Unit) {
         Text("Contador de\ntokens", fontSize = 34.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold, color = TEXTO)
         Text("Mira el contexto y los límites de Claude Code desde tu teléfono.", color = TENUE, fontSize = 15.sp)
         Spacer(Modifier.height(8.dp))
-        Campo(url, { url = it }, "URL del proyecto", R.drawable.ic_enlace, KeyboardType.Uri)
-        Campo(clave, { clave = it }, "Clave pública (publishable o anon)", R.drawable.ic_llave)
+        if (propio) {
+            Campo(url, { url = it }, "URL del proyecto", R.drawable.ic_enlace, KeyboardType.Uri)
+            Campo(clave, { clave = it }, "Clave pública (publishable o anon)", R.drawable.ic_llave)
+        }
         Campo(correo, { correo = it }, "Correo", R.drawable.ic_correo, KeyboardType.Email)
-        Campo(contrasena, { contrasena = it }, "Contraseña", R.drawable.ic_candado, KeyboardType.Password, secreto = true)
+        Campo(
+            contrasena, { contrasena = it }, if (crear) "Contraseña (mínimo 8)" else "Contraseña",
+            R.drawable.ic_candado, KeyboardType.Password, secreto = true,
+        )
         if (error.isNotEmpty()) Aviso(error)
         Spacer(Modifier.height(4.dp))
-        BotonDegradado(if (ocupado) "Entrando…" else "Entrar", habilitado = !ocupado, modifier = Modifier.fillMaxWidth()) {
+        val etiqueta = if (crear) "Crear cuenta" else "Entrar"
+        BotonDegradado(if (ocupado) "Un momento…" else etiqueta, habilitado = !ocupado, modifier = Modifier.fillMaxWidth()) {
             ocupado = true; error = ""
             alcance.launch {
                 try {
-                    supabase.entrar(url, clave, correo, contrasena)
+                    if (crear) supabase.registrar(url, clave, correo, contrasena)
+                    else supabase.entrar(url, clave, correo, contrasena)
                     alEntrar()
                 } catch (e: Exception) {
                     error = e.message ?: "Error"
+                    // Cuenta creada pero falta confirmar el correo: pasa a «Entrar».
+                    if (error.startsWith("Cuenta creada")) crear = false
                 } finally {
                     ocupado = false
+                }
+            }
+        }
+        Text(
+            if (crear) "¿Ya tienes cuenta? Entrar" else "¿Primera vez? Crear cuenta",
+            color = SALIDA, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+            modifier = Modifier.clickable { crear = !crear; error = "" }.padding(vertical = 6.dp),
+        )
+        if (supabase.hayServidor) Text(
+            if (propio) "Usar el servidor de la app" else "Servidor propio",
+            color = TENUE, fontSize = 12.sp,
+            modifier = Modifier.clickable { propio = !propio }.padding(vertical = 4.dp),
+        )
+    }
+}
+
+/** Genera el código que se escribe en Claude Code (`/tokens vincular CÓDIGO`). */
+@Composable
+private fun Vincular(supabase: Supabase) {
+    var codigo by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf("") }
+    var ocupado by remember { mutableStateOf(false) }
+    var equipos by remember { mutableStateOf<List<Pair<String, String?>>>(emptyList()) }
+    val alcance = rememberCoroutineScope()
+    val portapapeles = LocalClipboardManager.current
+    LaunchedEffect(codigo) { runCatching { supabase.dispositivos() }.onSuccess { equipos = it } }
+
+    Tarjeta("Vincular Claude Code", R.drawable.ic_enlace, SALIDA) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (equipos.isEmpty()) {
+                Text("Aún no hay ningún Claude Code vinculado a tu cuenta.", color = TENUE, fontSize = 14.sp)
+            } else {
+                equipos.forEach { (nombre, usado) ->
+                    Text("• $nombre" + if (usado == null) " (sin datos aún)" else "", color = TENUE, fontSize = 13.sp)
+                }
+            }
+            if (codigo.isEmpty()) {
+                Text(
+                    "1. En Claude Code instala el mod «contador-tokens».\n2. Toca el botón y escribe en Claude Code:  /tokens vincular CÓDIGO",
+                    color = TENUE, fontSize = 13.sp, lineHeight = 18.sp,
+                )
+            } else {
+                Text(
+                    codigo.chunked(4).joinToString(" "), color = TEXTO, fontSize = 30.sp,
+                    fontWeight = FontWeight.Bold, letterSpacing = 3.sp,
+                    modifier = Modifier.clickable { portapapeles.setText(AnnotatedString(codigo)) },
+                )
+                Text(
+                    "En Claude Code escribe:  /tokens vincular $codigo\nVale 10 minutos y se usa una sola vez. Toca el código para copiarlo.",
+                    color = TENUE, fontSize = 13.sp, lineHeight = 18.sp,
+                )
+            }
+            if (error.isNotEmpty()) Aviso(error)
+            BotonDegradado(
+                if (ocupado) "Generando…" else if (codigo.isEmpty()) "Generar código" else "Generar otro",
+                habilitado = !ocupado, modifier = Modifier.fillMaxWidth(),
+            ) {
+                ocupado = true; error = ""
+                alcance.launch {
+                    try { codigo = supabase.crearCodigo() } catch (e: Exception) { error = e.message ?: "Error" } finally { ocupado = false }
                 }
             }
         }
@@ -358,7 +468,7 @@ private fun Panel(supabase: Supabase, alSalir: () -> Unit) {
         if (filas.isEmpty()) {
             Tarjeta("Esperando datos", R.drawable.ic_reloj, SALIDA) {
                 Text(
-                    "Todavía no llegan datos. Conecta Claude Code con un token de dispositivo y termina un turno.",
+                    "Todavía no llegan datos. Vincula Claude Code (abajo) y termina un turno.",
                     color = TENUE, fontSize = 14.sp,
                 )
             }
@@ -417,6 +527,8 @@ private fun Panel(supabase: Supabase, alSalir: () -> Unit) {
                 extra = "${u.totales.turnos} turnos" + if (u.totales.turnosSubagentes > 0) " + ${u.totales.turnosSubagentes} sub" else "",
             ) { Reparto(u.totales) }
         }
+
+        Vincular(supabase)
 
         // Pie
         Row(

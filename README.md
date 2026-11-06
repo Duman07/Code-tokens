@@ -15,6 +15,21 @@ App de Windows (Tauri)          App + widget de Android (Kotlin / Glance)
 - `android/`: app y widget de pantalla de inicio.
 - `claude-code-mod/contador-tokens/`: el mod de Claude Code (panel + sincronización). Para instalarlo, copia esa carpeta a `~/.claude/skills/contador-tokens` y reinicia Claude Code.
 
+## 0. Para cualquier usuario (cuenta propia, sin montar nada)
+
+Quien publica la app monta **un** Supabase (sección 1) y lo deja integrado:
+- Android: en `android/local.properties` añade `SUPABASE_URL=https://xxxx.supabase.co` y `SUPABASE_KEY=sb_publishable_…` y compila.
+- Mod: pon la misma URL y clave en `SERVIDOR` de `claude-code-mod/contador-tokens/hooks/register.tsx`.
+- En Supabase, **Authentication → Providers → Email** activado (con o sin confirmación de correo).
+
+Cada usuario después:
+1. Abre la app de Android → **Crear cuenta** (correo y contraseña de 8+ caracteres).
+2. Instala el mod en Claude Code: `/plugin install contador-tokens --marketplace Duman07/Code-tokens` (requiere el repositorio público).
+3. En la app, tarjeta **Vincular Claude Code → Generar código**; en Claude Code escribe `/tokens vincular CÓDIGO`.
+   Desde ese turno sus datos aparecen en la app. `/tokens desvincular` lo quita de ese equipo.
+
+Cada usuario solo ve sus datos (RLS). Los códigos valen 10 minutos y se usan una vez.
+
 ## 1. Supabase (una sola vez)
 
 1. Crea un proyecto en https://supabase.com (el plan gratuito sirve).
