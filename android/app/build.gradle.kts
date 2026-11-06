@@ -21,6 +21,12 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.2.0"
+        // IDs de PRUEBA de Google: muestran anuncios de prueba y no generan ingresos. Los reales van en
+        // local.properties (ADMOB_APP_ID=ca-app-pub-…~…, ADMOB_BANNER=ca-app-pub-…/…).
+        manifestPlaceholders["admobAppId"] = ajuste("ADMOB_APP_ID").ifEmpty { "ca-app-pub-3940256099942544~3347511713" }
+        // Sin IDs reales, el release no muestra anuncios (el debug sí, con los de prueba, para ver el diseño).
+        buildConfigField("boolean", "ADS_REALES", "${ajuste("ADMOB_APP_ID").isNotEmpty() && ajuste("ADMOB_BANNER").isNotEmpty()}")
+        buildConfigField("String", "ADMOB_BANNER", "\"${ajuste("ADMOB_BANNER").ifEmpty { "ca-app-pub-3940256099942544/9214589741" }}\"")
         buildConfigField("String", "SUPABASE_URL", "\"${ajuste("SUPABASE_URL")}\"")
         buildConfigField("String", "SUPABASE_KEY", "\"${ajuste("SUPABASE_KEY")}\"")
     }
@@ -65,4 +71,5 @@ dependencies {
     implementation("androidx.glance:glance-material3:1.1.1")
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("com.google.android.gms:play-services-ads:23.6.0")
 }

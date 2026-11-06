@@ -8,6 +8,9 @@ package com.contadortokens.app
 const val CONTACTO = "soporte@tudominio.com"
 const val ACTUALIZADO = "6 de noviembre de 2026"
 
+/** Cambia este valor cuando cambien los términos o la política: queda guardado con cada registro. */
+const val VERSION_TERMINOS = "2026-11-06"
+
 data class Seccion(val titulo: String, val texto: String)
 
 val POLITICA_PRIVACIDAD = listOf(
@@ -18,12 +21,17 @@ val POLITICA_PRIVACIDAD = listOf(
             "porcentaje de contexto, límites de uso, modelo usado, identificador de sesión, el nombre de la carpeta del proyecto " +
             "y el nombre que le diste a cada llave de dispositivo.\n" +
             "• No recogemos el contenido de tus conversaciones, tu código, tus archivos ni tus prompts.\n" +
-            "• No usamos publicidad, analítica de terceros ni rastreadores.",
+            "• Publicidad: la app muestra anuncios de Google AdMob. AdMob puede usar el identificador de publicidad de tu dispositivo, " +
+            "tu dirección IP y datos técnicos para mostrar anuncios y medirlos. En los países donde la ley lo exige, te pedimos tu " +
+            "consentimiento antes y puedes cambiarlo en Ajustes → Privacidad de anuncios. Nunca enviamos a los anunciantes tu consumo, " +
+            "tus proyectos ni tus llaves.\n" +
+            "• No usamos otra analítica de terceros ni rastreadores.",
     ),
     Seccion(
         "Para qué los usamos",
-        "Solo para mostrarte tu consumo en la app y en el widget, y para que puedas vincular y revocar tus equipos. " +
-            "No vendemos ni compartimos tus datos con terceros con fines comerciales.",
+        "Para mostrarte tu consumo en la app y en el widget, para que puedas vincular y revocar tus equipos, y para mostrar anuncios " +
+            "que financian la app (a través de Google AdMob, según su política: https://policies.google.com/technologies/ads). " +
+            "No vendemos tus datos de consumo ni los compartimos con terceros.",
     ),
     Seccion(
         "Dónde se guardan",
@@ -82,7 +90,12 @@ val TERMINOS = listOf(
         "6. Terminar",
         "Puedes dejar de usar la app y eliminar tu cuenta cuando quieras. Podemos modificar o cerrar el servicio avisando con antelación razonable.",
     ),
-    Seccion("7. Contacto", "$CONTACTO. Última actualización: $ACTUALIZADO."),
+    Seccion(
+        "7. Publicidad",
+        "La app es gratuita y muestra anuncios de terceros. No controlamos su contenido y no nos hacemos responsables de los " +
+            "productos o servicios anunciados. Está prohibido pulsar anuncios de forma artificial o fraudulenta.",
+    ),
+    Seccion("8. Contacto", "$CONTACTO. Última actualización: $ACTUALIZADO."),
 )
 
 data class Licencia(val nombre: String, val autor: String, val licencia: String)
@@ -93,4 +106,5 @@ val LICENCIAS = listOf(
     Licencia("Jetpack Glance (widget)", "Google / AndroidX", "Apache License 2.0"),
     Licencia("AndroidX Activity, Lifecycle, WorkManager", "Google / AndroidX", "Apache License 2.0"),
     Licencia("Kotlin y kotlinx.coroutines", "JetBrains", "Apache License 2.0"),
+    Licencia("Google Mobile Ads SDK y User Messaging Platform", "Google", "Términos del SDK de Google Mobile Ads"),
 )

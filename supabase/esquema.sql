@@ -231,6 +231,26 @@ $$;
 revoke all on function public.crear_token_dispositivo(text, uuid) from public, anon;
 grant execute on function public.crear_token_dispositivo(text, uuid) to authenticated;
 
+-- ---------- Términos obligatorios para registrarse ----------
+-- La app manda `terminos_version` dentro de los datos del usuario al crear la cuenta. Si falta, el alta
+-- se rechaza aquí, también para quien llame a la API sin pasar por la app.
+-- OJO: esto impide crear usuarios a mano desde Authentication → Users → Add user.
+-- Si algún día lo necesitas, borra el trigger: drop trigger exigir_terminos on auth.users;
+create or replace function public.exigir_terminos()
+returns trigger
+language plpgsql
+as $$
+begin
+  if coalesce(new.raw_user_meta_data ->> 'terminos_version', '') = '' then
+    raise exception 'Debes aceptar los términos y condiciones para registrarte';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists exigir_terminos on auth.users;
+create trigger exigir_terminos before insert on auth.users
+  for each row execute function public.exigir_terminos();
+
 -- ---------- Eliminar mi cuenta (lo exige Google Play) ----------
 -- Borra al usuario de auth.users; todo lo demás cae en cascada (tokens, sesiones, consumo, códigos).
 create or replace function public.eliminar_mi_cuenta()

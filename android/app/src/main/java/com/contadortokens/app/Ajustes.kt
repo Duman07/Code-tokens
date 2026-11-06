@@ -56,7 +56,7 @@ internal fun Ajustes(supabase: Supabase, alSalir: () -> Unit) {
 }
 
 @Composable
-private fun Subpantalla(titulo: String, atras: () -> Unit, contenido: @Composable () -> Unit) {
+internal fun Subpantalla(titulo: String, atras: () -> Unit, contenido: @Composable () -> Unit) {
     Column(
         Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -115,6 +115,10 @@ private fun Inicio(supabase: Supabase, alSalir: () -> Unit, ir: (String) -> Unit
             Fila("Política de privacidad", null) { ir("privacidad") }
             Fila("Términos y condiciones", null) { ir("terminos") }
             Fila("Licencias de código abierto", null) { ir("licencias") }
+            if (Anuncios.requierePrivacidad) {
+                val actividad = LocalContext.current as android.app.Activity
+                Fila("Privacidad de anuncios", "Cambia tu consentimiento") { Anuncios.opcionesPrivacidad(actividad) }
+            }
         }
 
         Tarjeta("Acerca de", R.drawable.ic_chispa, CACHE_ESCRITA) {
@@ -170,7 +174,7 @@ private fun Fila(titulo: String, detalle: String?, color: androidx.compose.ui.gr
 }
 
 @Composable
-private fun Documento(secciones: List<Seccion>) {
+internal fun Documento(secciones: List<Seccion>) {
     Text("Última actualización: $ACTUALIZADO", color = TENUE, fontSize = 12.sp)
     secciones.forEach {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

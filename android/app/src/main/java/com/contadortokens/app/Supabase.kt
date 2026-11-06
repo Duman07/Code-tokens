@@ -199,19 +199,25 @@ class Supabase(context: Context) {
     }
 
     /** Crea una cuenta nueva. Si el servidor pide confirmar el correo, lo dice y no inicia sesión. */
-    suspend fun registrar(url: String, clave: String, correo: String, contrasena: String) {
+    suspend fun registrar(url: String, clave: String, correo: String, contrasena: String, terminos: Boolean) {
+        if (!terminos) throw Exception("Debes aceptar los términos y condiciones y la política de privacidad.")
         fijarServidor(url, clave)
         if (contrasena.length < 8) throw Exception("La contraseña debe tener al menos 8 caracteres.")
         val (codigo, texto) = http(
             "POST", "${this.url}/auth/v1/signup",
             mapOf("apikey" to this.clave, "Content-Type" to "application/json"),
-            JSONObject().put("email", correo.trim()).put("password", contrasena).toString(),
+            JSONObject().put("email", correo.trim()).put("password", contrasena)
+                // Queda guardado con la cuenta: qué versión aceptó y cuándo.
+                .put("data", JSONObject().put("terminos_version", VERSION_TERMINOS).put("terminos_fecha", java.time.Instant.now().toString()))
+                .toString(),
         )
         val json = runCatching { JSONObject(texto) }.getOrDefault(JSONObject())
         if (codigo !in 200..299) {
+            val mensaje = json.optString("msg").ifEmpty { json.optString("error_description") }
+                .ifEmpty { json.optString("message") }.ifEmpty { "HTTP $codigo" }
+            // El trigger del servidor rechaza altas sin términos; GoTrue lo devuelve como error genérico.
             throw Exception(
-                json.optString("msg").ifEmpty { json.optString("error_description") }
-                    .ifEmpty { json.optString("message") }.ifEmpty { "HTTP $codigo" },
+                if (mensaje.contains("Database error", ignoreCase = true)) "Debes aceptar los términos y condiciones para registrarte." else mensaje,
             )
         }
         if (json.optString("access_token").isEmpty()) {

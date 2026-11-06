@@ -125,6 +125,7 @@ class MainActivity : ComponentActivity() {
         val supabase = Supabase(this)
         Actualizador.programar(this)
         Tema.cargar(this)
+        Anuncios.iniciar(this)
         setContent {
             Tema.sistemaOscuro = androidx.compose.foundation.isSystemInDarkTheme()
             SideEffect {
@@ -170,13 +171,18 @@ private fun App(supabase: Supabase) {
 @Composable
 private fun Principal(supabase: Supabase, alSalir: () -> Unit) {
     var pestana by remember { mutableStateOf(0) }
-    Box(Modifier.fillMaxSize()) {
-        when (pestana) {
-            0 -> Panel(supabase, alSalir)
-            1 -> Consumo(supabase)
-            else -> Ajustes(supabase, alSalir)
+    Column(Modifier.fillMaxSize()) {
+        // Publicidad: arriba y separada de la barra de abajo, para que no se pulse sin querer.
+        // No sale en Ajustes (cuentas, llaves, textos legales).
+        if (pestana != 2) BannerAnuncios()
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            when (pestana) {
+                0 -> Panel(supabase, alSalir)
+                1 -> Consumo(supabase)
+                else -> Ajustes(supabase, alSalir)
+            }
+            BarraNavegacion(pestana, Modifier.align(Alignment.BottomCenter)) { pestana = it }
         }
-        BarraNavegacion(pestana, Modifier.align(Alignment.BottomCenter)) { pestana = it }
     }
 }
 
@@ -325,7 +331,18 @@ private fun Entrar(supabase: Supabase, alEntrar: () -> Unit) {
     var contrasena by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
     var ocupado by remember { mutableStateOf(false) }
+    var acepto by remember { mutableStateOf(false) }
+    var leer by remember { mutableStateOf<String?>(null) }
     val alcance = rememberCoroutineScope()
+
+    // Los textos se pueden leer antes de registrarse.
+    if (leer != null) {
+        androidx.activity.compose.BackHandler { leer = null }
+        Subpantalla(if (leer == "terminos") "Términos y condiciones" else "Política de privacidad", { leer = null }) {
+            Documento(if (leer == "terminos") TERMINOS else POLITICA_PRIVACIDAD)
+        }
+        return
+    }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 32.dp),
@@ -345,14 +362,30 @@ private fun Entrar(supabase: Supabase, alEntrar: () -> Unit) {
             contrasena, { contrasena = it }, if (crear) "Contraseña (mínimo 8)" else "Contraseña",
             R.drawable.ic_candado, KeyboardType.Password, secreto = true,
         )
+        if (crear) Row(verticalAlignment = Alignment.Top) {
+            androidx.compose.material3.Checkbox(
+                acepto, { acepto = it },
+                colors = androidx.compose.material3.CheckboxDefaults.colors(checkedColor = SALIDA, uncheckedColor = TENUE),
+            )
+            Column(Modifier.padding(top = 12.dp)) {
+                Text("Acepto los", color = TENUE, fontSize = 13.sp)
+                Row {
+                    Text("Términos y condiciones", color = SALIDA, fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clickable { leer = "terminos" })
+                    Text(" y la ", color = TENUE, fontSize = 13.sp)
+                    Text("Política de privacidad", color = SALIDA, fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clickable { leer = "privacidad" })
+                }
+            }
+        }
         if (error.isNotEmpty()) Aviso(error)
         Spacer(Modifier.height(4.dp))
         val etiqueta = if (crear) "Crear cuenta" else "Entrar"
-        BotonDegradado(if (ocupado) "Un momento…" else etiqueta, habilitado = !ocupado, modifier = Modifier.fillMaxWidth()) {
+        BotonDegradado(if (ocupado) "Un momento…" else etiqueta, habilitado = !ocupado && (!crear || acepto), modifier = Modifier.fillMaxWidth()) {
             ocupado = true; error = ""
             alcance.launch {
                 try {
-                    if (crear) supabase.registrar(url, clave, correo, contrasena)
+                    if (crear) supabase.registrar(url, clave, correo, contrasena, acepto)
                     else supabase.entrar(url, clave, correo, contrasena)
                     alEntrar()
                 } catch (e: Exception) {
