@@ -5,7 +5,7 @@ package com.contadortokens.app
  * y pon tu correo real en CONTACTO. Los mismos textos están en docs/ para publicarlos en una página web,
  * porque Google Play pide una URL pública de la política de privacidad.
  */
-const val CONTACTO = "dumanalmeidaolivo@gmail.com"
+const val CONTACTO = "janext79@gmail.com"
 const val ACTUALIZADO = "6 de noviembre de 2026"
 
 /** Cambia este valor cuando cambien los términos o la política: queda guardado con cada registro. */
