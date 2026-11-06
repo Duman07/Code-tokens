@@ -83,7 +83,7 @@ El token también se pone por `/config`.
 
 El widget muestra el contexto de la sesión más reciente, los límites de 5 horas y 7 días, y lo gastado hoy.
 Android solo deja actualizar widgets en segundo plano cada **15 min**. Toca **↻** para actualizar al momento,
-o abre la app, que actualiza cada 20 s.
+o abre la app, que actualiza cada 60 s.
 
 ## Qué se sincroniza y qué no
 

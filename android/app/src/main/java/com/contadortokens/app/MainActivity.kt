@@ -343,9 +343,9 @@ private fun Panel(supabase: Supabase, alSalir: () -> Unit) {
             cargando = false
         }
     }
-    // Mientras la app está abierta, refresca cada 20 s.
+    // Mientras la app está abierta, refresca cada 60 s.
     LaunchedEffect(Unit) {
-        while (true) { cargar(); delay(20_000) }
+        while (true) { cargar(); delay(60_000) }
     }
 
     Column(
